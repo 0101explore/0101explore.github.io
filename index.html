@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <style>
+    body {
+      text-align: center;
+    }
+
+    #btnStop {
+      display: none;
+    }
+
+    #btnStart {
+      color: blue;
+    }
+
+    #btnStop {
+      color: red;
+    }
+
+    #btnStart,
+    #btnStop {
+      width: 200px;
+      height: 100px;
+      font-weight: bold;
+      font-size: 24px;
+      margin-bottom: 12px;
+    }
+
+    #recordPlay,
+    #recording {
+      display: none;
+    }
+
+    table {
+      font-family: arial, sans-serif;
+      border-collapse: collapse;
+      width: 100%;
+    }
+
+    td,
+    th {
+      border: 1px solid #dddddd;
+      text-align: left;
+      padding: 8px;
+    }
+
+    tr:nth-child(even) {
+      background-color: #dddddd;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Sound Record</h1>
+  <div>
+    <button id="btnStart">START RECORD</button>
+    <button id="btnStop">STOP RECORD</button>
+  </div>
+  <div>
+    <div id="recording">Recording ...</div>
+    <audio id="recordPlay" controls></audio>
+  </div>
+  <br>
+  <hr>
+  <div>
+    <h3>List sound on server</h3>
+    <table id="tableSound"></table>
+  </div>
+
+
+  <script>
+    const URL_SERVER = "http://116.98.58.155:5000"
+    const btnStart = document.getElementById('btnStart');
+    const btnStop = document.getElementById('btnStop');
+    const playAudio = document.getElementById('recordPlay');
+    const recording = document.getElementById('recording');
+    const tableSound = document.getElementById('tableSound');
+    let mediaRecorder;
+    let dataRecord;
+
+    btnStart.addEventListener('click', function (ev) {
+      btnStart.style.display = "none";
+      btnStop.style.display = "inline-block";
+      playAudio.style.display = "none";
+      recording.style.display = "inline-block";
+      mediaRecorder.start();
+    })
+    btnStop.addEventListener('click', function (ev) {
+      btnStart.style.display = "inline-block";
+      btnStop.style.display = "none";
+      playAudio.style.display = "inline-block";
+      recording.style.display = "none";
+      mediaRecorder.stop();
+    });
+    {
+      let dataArray = [];
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then((mediaStreamObj) => {
+          mediaRecorder = new MediaRecorder(mediaStreamObj);
+          mediaRecorder.ondataavailable = function (ev) {
+            dataArray.push(ev.data);
+          }
+          mediaRecorder.onstop = function (ev) {
+            dataRecord = new Blob(dataArray,
+              { 'type': 'audio/mp3;' });
+            dataArray = [];
+            let audioSrc = window.URL.createObjectURL(dataRecord);
+            playAudio.src = audioSrc;
+            send();
+          }
+        })
+    }
+    const send = async () => {
+      await fetch(URL_SERVER+"/data", {
+        method: "POST",
+        body: dataRecord
+      }).then(async res => {
+        const data = await res.json();
+        addSoundToTable(data.data);
+      }).catch(e => {
+        console.log(e);
+      })
+    }
+
+    const getListSound = async () => {
+      return await fetch(URL_SERVER+"/data", {
+        method: "GET"
+      }).then(async res => {
+        const data = await res.json();
+        return data.data;
+      }).catch(e => {
+        console.log(e);
+        alert("Cannot connect to Server , call admin Nguyen to open server");
+      })
+    }
+
+    let firstElTable = undefined;
+    const addSoundToTable = (sound) => {
+      const tr = document.createElement("tr");
+      const tdName = document.createElement("td");
+      const tdAction = document.createElement("td");
+
+      const btnPlay = document.createElement("button");
+      btnPlay.innerHTML = "play"
+      btnPlay.addEventListener("click", function () {
+        var audio = new Audio();
+        audio.src = URL_SERVER + "/data?name=" + sound;
+        audio.play();
+      })
+      tdName.innerHTML = sound;
+      tdAction.append(btnPlay);
+      tr.appendChild(tdName);
+      tr.appendChild(tdAction);
+      tableSound.appendChild(tr);
+    
+      if (firstElTable != undefined) {
+        tableSound.insertBefore(tr, firstElTable);
+      }
+      else {
+        tableSound.appendChild(tr);
+      }
+      firstElTable = tr;
+    }
+
+    const run = async () => {
+      const listSound = await getListSound();
+
+      for (const sound of listSound) {
+        addSoundToTable(sound);
+      }
+
+    }
+    run();
+  </script>
+</body>
+
+</html>
